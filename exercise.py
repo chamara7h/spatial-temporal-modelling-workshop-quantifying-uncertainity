@@ -100,23 +100,18 @@ bahia_train = train[train['location'] == 'Bahia'].sort_values('time_period').res
 bahia_future = future[future['location'] == 'Bahia'].sort_values('time_period').reset_index(drop=True)
 
 # Fit SARIMAX with automatic order selection via pmdarima
-try:
-    import pmdarima as pm
-    auto_fit = pm.auto_arima(
-        bahia_train['disease_cases'],
-        exogenous=bahia_train[['rainfall', 'mean_temperature']],
-        seasonal=True, m=12,
-        suppress_warnings=True,
-        stepwise=True,
-        error_action='ignore',
-    )
-    order = auto_fit.order
-    seasonal_order = auto_fit.seasonal_order
-    print(f"Auto-selected order: {order}, seasonal_order: {seasonal_order}")
-except ImportError:
-    print("pmdarima not installed – using default ARIMA(1,1,1)(1,1,1,12)")
-    order = (1, 1, 1)
-    seasonal_order = (1, 1, 1, 12)
+import pmdarima as pm
+auto_fit = pm.auto_arima(
+    bahia_train['disease_cases'],
+    exogenous=bahia_train[['rainfall', 'mean_temperature']],
+    seasonal=True, m=12,
+    suppress_warnings=True,
+    stepwise=True,
+    error_action='ignore',
+)
+order = auto_fit.order
+seasonal_order = auto_fit.seasonal_order
+print(f"Auto-selected order: {order}, seasonal_order: {seasonal_order}")
 
 # Fit statsmodels SARIMAX (used for forecasting, intervals, etc.)
 model = SARIMAX(
@@ -370,23 +365,13 @@ for t in range(i_calib_start, i_calib_end + 1):
     x_win = xreg_all[:t]
     x_next = xreg_all[t:t+1]
 
-    try:
-        m = SARIMAX(
-            y_win, exog=x_win,
-            order=order, seasonal_order=seasonal_order,
-            enforce_stationarity=False, enforce_invertibility=False,
-        ).fit(disp=False)
-        fc_1 = m.get_forecast(steps=1, exog=x_next)
-        yhat_1 = fc_1.predicted_mean.iloc[0]
-    except Exception:
-        # Fallback: use a simpler model if convergence fails
-        m = SARIMAX(
-            y_win, exog=x_win,
-            order=(1, 1, 1), seasonal_order=(0, 1, 1, 12),
-            enforce_stationarity=False, enforce_invertibility=False,
-        ).fit(disp=False)
-        fc_1 = m.get_forecast(steps=1, exog=x_next)
-        yhat_1 = fc_1.predicted_mean.iloc[0]
+    m = SARIMAX(
+        y_win, exog=x_win,
+        order=order, seasonal_order=seasonal_order,
+        enforce_stationarity=False, enforce_invertibility=False,
+    ).fit(disp=False)
+    fc_1 = m.get_forecast(steps=1, exog=x_next)
+    yhat_1 = fc_1.predicted_mean.iloc[0]
 
     actual_1 = y_all[t]
     calib_errors.append(abs(actual_1 - yhat_1))
